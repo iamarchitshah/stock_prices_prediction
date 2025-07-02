@@ -59,19 +59,32 @@ if uploaded_file:
         st.success(f"{m} MSE: {mse:.2f}")
 
     # Display predicted prices (LSTM)
-st.subheader("🔢 Predicted vs Actual Prices with Error (LSTM)")
+st.subheader("🔢 Predicted vs Actual Prices with Error")
 
-# Prepare DataFrame with difference
-pred_df = pd.DataFrame({
-    'Actual Price': results['LSTM']['actual'].flatten(),
-    'Predicted Price': results['LSTM']['predicted'].flatten()
-})
-pred_df['Difference (Error)'] = pred_df['Actual Price'] - pred_df['Predicted Price']
+# Loop through all 3 models and show results
+for model_name in ['RNN', 'GRU', 'LSTM']:
+    st.markdown(f"### 🧠 {model_name} Predictions")
 
-# Show last 30 rows
-st.dataframe(pred_df.tail(30))
+    # Create DataFrame
+    df_pred = pd.DataFrame({
+        'Actual Price': results[model_name]['actual'].flatten(),
+        'Predicted Price': results[model_name]['predicted'].flatten()
+    })
+    df_pred['Difference (Error)'] = df_pred['Actual Price'] - df_pred['Predicted Price']
 
-# Print each row as sentence (optional)
-st.subheader("📌 Prediction Differences (last 5 shown):")
-for i, row in pred_df.tail(5).iterrows():
-    st.write(f"Actual Value = {row['Actual Price']:.2f} | Predict Value = {row['Predicted Price']:.2f} | Difference = {row['Difference (Error)']:.2f}")
+    # Show table
+    st.dataframe(df_pred.tail(30))
+
+    # Print last 5 prediction sentences
+    st.markdown("📌 Prediction Differences (last 5 shown):")
+    for i, row in df_pred.tail(5).iterrows():
+        st.write(f"Actual = {row['Actual Price']:.2f} | Predicted = {row['Predicted Price']:.2f} | Error = {row['Difference (Error)']:.2f}")
+
+    # CSV Download button
+    csv = df_pred.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label=f"📥 Download {model_name} Predictions as CSV",
+        data=csv,
+        file_name=f"{model_name.lower()}_predictions.csv",
+        mime='text/csv'
+    )
