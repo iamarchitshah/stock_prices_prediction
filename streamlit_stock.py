@@ -58,22 +58,20 @@ if uploaded_file:
         results[m] = {'actual': actual, 'predicted': predicted, 'mse': mse}
         st.success(f"{m} MSE: {mse:.2f}")
 
-    st.subheader("📊 Predictions")
-    fig, ax = plt.subplots(figsize=(12, 6))
-    ax.plot(results['LSTM']['actual'], label='Actual', linestyle='--', color='black')
-    for m in ['RNN', 'GRU', 'LSTM']:
-        ax.plot(results[m]['predicted'], label=f'{m} Prediction')
-    ax.set_title("Stock Price Prediction Comparison")
-    ax.set_xlabel("Time Steps")
-    ax.set_ylabel("Price")
-    ax.legend()
-    ax.grid(True)
-    st.pyplot(fig)
+    # Display predicted prices (LSTM)
+st.subheader("🔢 Predicted vs Actual Prices with Error (LSTM)")
 
+# Prepare DataFrame with difference
+pred_df = pd.DataFrame({
+    'Actual Price': results['LSTM']['actual'].flatten(),
+    'Predicted Price': results['LSTM']['predicted'].flatten()
+})
+pred_df['Difference (Error)'] = pred_df['Actual Price'] - pred_df['Predicted Price']
 
-    st.subheader("🔢 Predicted vs Actual Prices (LSTM)")
-    pred_df = pd.DataFrame({
-        'Actual Price': results['LSTM']['actual'].flatten(),
-        'Predicted Price': results['LSTM']['predicted'].flatten()
-    })
-    st.dataframe(pred_df.tail(30))  # Show last 30 rows only
+# Show last 30 rows
+st.dataframe(pred_df.tail(30))
+
+# Print each row as sentence (optional)
+st.subheader("📌 Prediction Differences (last 5 shown):")
+for i, row in pred_df.tail(5).iterrows():
+    st.write(f"Actual Value = {row['Actual Price']:.2f} | Predict Value = {row['Predicted Price']:.2f} | Difference = {row['Difference (Error)']:.2f}")
