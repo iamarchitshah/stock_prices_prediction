@@ -69,3 +69,11 @@ if uploaded_file:
     ax.legend()
     ax.grid(True)
     st.pyplot(fig)
+
+
+    st.subheader("🔢 Predicted vs Actual Prices (LSTM)")
+    pred_df = pd.DataFrame({
+        'Actual Price': results['LSTM']['actual'].flatten(),
+        'Predicted Price': results['LSTM']['predicted'].flatten()
+    })
+    st.dataframe(pred_df.tail(30))  # Show last 30 rows only
