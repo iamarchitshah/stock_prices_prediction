@@ -5,11 +5,11 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.metrics import mean_squared_error
 from sklearn.ensemble import RandomForestRegressor
 
-st.title("🌲 Random Forest Stock Predictor (Open & Close)")
+st.title("🌲 Enhanced Random Forest Stock Predictor (Open & Close)")
 model_type = st.selectbox("Choose Model Type", ["Random Forest", "GRU", "RNN"])
 
 uploaded_file = st.file_uploader("Upload CSV with 'Date', 'Open', 'High', 'Low', 'Close', 'Volume'", type='csv')
@@ -33,10 +33,18 @@ if uploaded_file:
     X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.1, shuffle=False)
 
     if model_type == "Random Forest":
-        model = RandomForestRegressor(n_estimators=100, random_state=42)
-        st.write("⏳ Training Random Forest...")
-        model.fit(X_train, y_train)
-
+        st.write("🔍 Hyperparameter Tuning Random Forest (GridSearchCV)...")
+        param_grid = {
+            'n_estimators': [100, 200],
+            'max_depth': [10, 20, None],
+            'min_samples_split': [2, 5],
+            'min_samples_leaf': [1, 2],
+        }
+        grid = GridSearchCV(RandomForestRegressor(random_state=42), param_grid, cv=3, n_jobs=-1)
+        grid.fit(X_train, y_train)
+        model = grid.best_estimator_
+        st.success(f"Best Parameters: {grid.best_params_}")
+        val_pred = model.predict(X_val)
     else:
         from keras.models import Model
         from keras.layers import Input, GRU, SimpleRNN, Dense, Dropout, Bidirectional, BatchNormalization, Flatten, Activation, RepeatVector, Permute, Multiply, Lambda
@@ -90,13 +98,10 @@ if uploaded_file:
         ax_loss.legend()
         st.pyplot(fig_loss)
 
-    # Predict on validation
-    st.subheader("📈 Validation Results")
-    if model_type == "Random Forest":
-        val_pred = model.predict(X_val)
-    else:
         val_pred = model.predict(X_val_seq)
 
+    # Display results
+    st.subheader("📈 Validation Results")
     padded_val = np.zeros((val_pred.shape[0], 5))
     padded_val[:, 0] = val_pred[:, 0]
     padded_val[:, 3] = val_pred[:, 1]
@@ -122,7 +127,7 @@ if uploaded_file:
         sample = test_data[i - PAST_DAYS:i]
         X_test.append(sample.flatten() if model_type == "Random Forest" else sample)
     X_test = np.array(X_test)
-    
+
     if model_type != "Random Forest":
         X_test = X_test.reshape((X_test.shape[0], PAST_DAYS, 5))
 
