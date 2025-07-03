@@ -1,5 +1,4 @@
 # stock_predictor_advanced.py
-# Deep transformer training + enhanced attention layers
 
 import streamlit as st
 import numpy as np
@@ -7,7 +6,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_absolute_percentage_error
+from sklearn.metrics import mean_absolute_percentage_error, mean_squared_error
 from sklearn.ensemble import RandomForestRegressor
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
@@ -107,8 +106,10 @@ if uploaded_file:
             model.fit(X_train, y_train, epochs=30, batch_size=32, verbose=0)
             val_pred = model.predict(X_val)
 
+    # 🎯 Add Metrics
     val_mape = mean_absolute_percentage_error(y_val, val_pred) * 100
-    st.success(f"✅ Model trained successfully | Validation MAPE: {val_mape:.2f}%")
+    val_mse = mean_squared_error(y_val, val_pred)
+    st.success(f"✅ Model trained successfully | Validation MAPE: {val_mape:.2f}% | MSE: {val_mse:.4f}")
 
     st.subheader("📉 Actual vs Predicted")
     fig, ax = plt.subplots(figsize=(12, 6))
@@ -167,4 +168,4 @@ if uploaded_file:
     ax2.legend()
     st.pyplot(fig2)
 
-    st.success("🎉 Deep Transformer model training and forecasting complete!")
+    st.success("🎉 Deep model training and forecasting complete!")
