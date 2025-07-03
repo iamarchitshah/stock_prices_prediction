@@ -1,4 +1,4 @@
-# stock_predictor_all_models.py (Improved with Feature Engineering and Prediction Output)
+# stock_predictor_all_models.py (Enhanced with Future Predictions)
 
 import streamlit as st
 import numpy as np
@@ -14,7 +14,7 @@ from tensorflow.keras.layers import GRU, SimpleRNN, Dense, Conv1D, MaxPooling1D,
 from tensorflow.keras import Model
 import pandas_ta as ta
 
-st.title("📊 Enhanced Stock Price Predictor with Feature Engineering")
+st.title("📊 Enhanced Stock Price Predictor with Feature Engineering and Future Prediction")
 
 model_type = st.selectbox("Choose Model", ["Random Forest", "GRU", "RNN", "CNN", "Transformer"])
 uploaded_file = st.file_uploader("Upload CSV with 'Date', 'Open', 'High', 'Low', 'Close', 'Volume'", type='csv')
@@ -51,7 +51,6 @@ if uploaded_file:
         x = tf.keras.layers.MultiHeadAttention(num_heads=num_heads, key_dim=head_size)(inputs, inputs)
         x = Dropout(dropout)(x)
         x = LayerNormalization(epsilon=1e-6)(x + inputs)
-
         res = x
         x = tf.keras.layers.Conv1D(filters=ff_dim, kernel_size=1, activation="relu")(x)
         x = Dropout(dropout)(x)
@@ -109,7 +108,6 @@ if uploaded_file:
     ax.legend()
     st.pyplot(fig)
 
-    # Show all predicted values
     pred_df = pd.DataFrame({
         "Actual Open": y_val[:, 0],
         "Predicted Open": val_pred[:, 0],
@@ -119,4 +117,42 @@ if uploaded_file:
     st.subheader("📋 All Predicted Values")
     st.dataframe(pred_df)
 
-    st.success("✅ Model improved with engineered features!")
+    # 🔮 Future Predictions
+    st.subheader("🔮 Future Predictions (Next 10 Days)")
+    future_days = 10
+    future_input = X[-1]
+    future_preds = []
+
+    for _ in range(future_days):
+        inp = future_input.reshape(1, PAST_DAYS, X.shape[2])
+        pred = model.predict(inp, verbose=0)
+        future_preds.append(pred[0])
+        next_input = np.concatenate((future_input[1:], [np.append(pred[0], [0] * (X.shape[2] - 2))]), axis=0)
+        future_input = next_input
+
+    future_preds = np.array(future_preds)
+    template_row = np.zeros((future_preds.shape[0], X.shape[2]))
+    template_row[:, 0] = future_preds[:, 0]
+    template_row[:, 3] = future_preds[:, 1]
+    scaled_back = scaler.inverse_transform(template_row)
+    future_open = scaled_back[:, 0]
+    future_close = scaled_back[:, 3]
+
+    dates = pd.date_range(start=df.index[-1] + pd.Timedelta(days=1), periods=future_days, freq='B')
+    future_df = pd.DataFrame({
+        "Date": dates,
+        "Predicted Open": future_open,
+        "Predicted Close": future_close
+    })
+    st.dataframe(future_df)
+
+    fig2, ax2 = plt.subplots()
+    ax2.plot(future_df["Date"], future_df["Predicted Open"], label="Future Open")
+    ax2.plot(future_df["Date"], future_df["Predicted Close"], label="Future Close")
+    ax2.set_title("📈 Future Stock Price Predictions (Next 10 Days)")
+    ax2.set_xlabel("Date")
+    ax2.set_ylabel("Price")
+    ax2.legend()
+    st.pyplot(fig2)
+
+    st.success("✅ Model improved and extended with future prediction!")
