@@ -1,4 +1,4 @@
-# stock_predictor_full_comparison.py
+# stock_predictor_all_models.py
 
 import streamlit as st
 import numpy as np
@@ -10,11 +10,12 @@ from sklearn.metrics import mean_squared_error
 from sklearn.ensemble import RandomForestRegressor
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import GRU, SimpleRNN, LSTM, Dense, Dropout, Conv1D, MaxPooling1D, Flatten
+from tensorflow.keras.layers import GRU, SimpleRNN, Dense, Conv1D, MaxPooling1D, Flatten, Input, Dropout, LayerNormalization, GlobalAveragePooling1D
+from tensorflow.keras import Model
 
 st.title("📊 Stock Price Predictor (Open & Close) - All Models")
 
-model_type = st.selectbox("Choose Model", ["Random Forest", "GRU", "RNN", "CNN"])
+model_type = st.selectbox("Choose Model", ["Random Forest", "GRU", "RNN", "CNN", "Transformer"])
 uploaded_file = st.file_uploader("Upload CSV with 'Date', 'Open', 'High', 'Low', 'Close', 'Volume'", type='csv')
 
 if uploaded_file:
@@ -33,6 +34,26 @@ if uploaded_file:
     X, y = np.array(X), np.array(y)
 
     X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.1, shuffle=False)
+
+    def transformer_encoder(inputs, head_size=64, num_heads=2, ff_dim=64, dropout=0.1):
+        x = tf.keras.layers.MultiHeadAttention(num_heads=num_heads, key_dim=head_size)(inputs, inputs)
+        x = Dropout(dropout)(x)
+        x = LayerNormalization(epsilon=1e-6)(x + inputs)
+
+        res = x
+        x = tf.keras.layers.Conv1D(filters=ff_dim, kernel_size=1, activation="relu")(x)
+        x = Dropout(dropout)(x)
+        x = tf.keras.layers.Conv1D(filters=inputs.shape[-1], kernel_size=1)(x)
+        return LayerNormalization(epsilon=1e-6)(x + res)
+
+    def build_transformer_model(input_shape):
+        inputs = Input(shape=input_shape)
+        x = transformer_encoder(inputs)
+        x = GlobalAveragePooling1D()(x)
+        x = Dense(64, activation='relu')(x)
+        x = Dropout(0.1)(x)
+        outputs = Dense(2)(x)
+        return Model(inputs, outputs)
 
     if model_type == "Random Forest":
         X_rf = X.reshape(X.shape[0], -1)
@@ -71,7 +92,12 @@ if uploaded_file:
         model.fit(X_train, y_train, epochs=20, batch_size=32, verbose=0)
         val_pred = model.predict(X_val)
 
-    # Reverse scaling for plotting
+    elif model_type == "Transformer":
+        model = build_transformer_model(X_train.shape[1:])
+        model.compile(optimizer='adam', loss='mse')
+        model.fit(X_train, y_train, epochs=20, batch_size=32, verbose=0)
+        val_pred = model.predict(X_val)
+
     padded_pred = np.zeros((val_pred.shape[0], 5))
     padded_pred[:, 0] = val_pred[:, 0]
     padded_pred[:, 3] = val_pred[:, 1]
@@ -90,7 +116,6 @@ if uploaded_file:
     ax_val.legend()
     st.pyplot(fig_val)
 
-    # Predict next 20 days
     st.subheader("🔮 Predicting Next 20 Days")
     test_data = scaled_data[-(PAST_DAYS + 20):]
     X_test = []
