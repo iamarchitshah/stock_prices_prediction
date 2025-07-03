@@ -1,15 +1,15 @@
-# advanced_stock_prediction_rf.py
+# optimized_stock_prediction_rf.py
 
 import streamlit as st
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error
 from sklearn.ensemble import RandomForestRegressor
 
-st.title("🌲 Enhanced Random Forest Stock Predictor (Open & Close)")
+st.title("🌲 Optimized Random Forest Stock Predictor (Open & Close)")
 model_type = st.selectbox("Choose Model Type", ["Random Forest", "GRU", "RNN"])
 
 uploaded_file = st.file_uploader("Upload CSV with 'Date', 'Open', 'High', 'Low', 'Close', 'Volume'", type='csv')
@@ -23,7 +23,7 @@ if uploaded_file:
     scaler = MinMaxScaler()
     scaled_data = scaler.fit_transform(data)
 
-    PAST_DAYS = 90
+    PAST_DAYS = 60  # Reduced for speed
     X, y = [], []
     for i in range(PAST_DAYS, len(scaled_data)):
         X.append(scaled_data[i - PAST_DAYS:i].flatten())
@@ -33,17 +33,15 @@ if uploaded_file:
     X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.1, shuffle=False)
 
     if model_type == "Random Forest":
-        st.write("🔍 Hyperparameter Tuning Random Forest (GridSearchCV)...")
-        param_grid = {
-            'n_estimators': [100, 200],
-            'max_depth': [10, 20, None],
-            'min_samples_split': [2, 5],
-            'min_samples_leaf': [1, 2],
-        }
-        grid = GridSearchCV(RandomForestRegressor(random_state=42), param_grid, cv=3, n_jobs=-1)
-        grid.fit(X_train, y_train)
-        model = grid.best_estimator_
-        st.success(f"Best Parameters: {grid.best_params_}")
+        st.write("⏳ Training Optimized Random Forest...")
+        model = RandomForestRegressor(
+            n_estimators=100,
+            max_depth=15,
+            min_samples_leaf=2,
+            random_state=42,
+            n_jobs=-1
+        )
+        model.fit(X_train, y_train)
         val_pred = model.predict(X_val)
     else:
         from keras.models import Model
