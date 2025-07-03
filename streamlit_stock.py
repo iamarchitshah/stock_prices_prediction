@@ -1,4 +1,4 @@
-# stock_predictor_all_models.py (Enhanced with Future Predictions)
+# stock_predictor_all_models.py (Enhanced with Future Predictions and Model Fixes)
 
 import streamlit as st
 import numpy as np
@@ -125,7 +125,13 @@ if uploaded_file:
 
     for _ in range(future_days):
         inp = future_input.reshape(1, PAST_DAYS, X.shape[2])
-        pred = model.predict(inp, verbose=0)
+
+        if model_type == "Random Forest":
+            inp_rf = inp.reshape(1, -1)
+            pred = model.predict(inp_rf)
+        else:
+            pred = model.predict(inp, verbose=0)
+
         future_preds.append(pred[0])
         next_input = np.concatenate((future_input[1:], [np.append(pred[0], [0] * (X.shape[2] - 2))]), axis=0)
         future_input = next_input
@@ -155,4 +161,4 @@ if uploaded_file:
     ax2.legend()
     st.pyplot(fig2)
 
-    st.success("✅ Model improved and extended with future prediction!")
+    st.success("✅ Model improved and future prediction fixed!")
