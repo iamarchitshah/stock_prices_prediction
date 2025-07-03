@@ -1,4 +1,4 @@
-# stock_predictor_all_models.py (Improved with Feature Engineering)
+# stock_predictor_all_models.py (Improved with Feature Engineering and Prediction Output)
 
 import streamlit as st
 import numpy as np
@@ -108,5 +108,15 @@ if uploaded_file:
     ax.set_title(f"{model_type} Model: Actual vs Predicted")
     ax.legend()
     st.pyplot(fig)
+
+    # Show all predicted values
+    pred_df = pd.DataFrame({
+        "Actual Open": y_val[:, 0],
+        "Predicted Open": val_pred[:, 0],
+        "Actual Close": y_val[:, 1],
+        "Predicted Close": val_pred[:, 1],
+    })
+    st.subheader("📋 All Predicted Values")
+    st.dataframe(pred_df)
 
     st.success("✅ Model improved with engineered features!")
