@@ -9,13 +9,15 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error
 
 from keras.models import Model
-from keras.layers import (Input, LSTM, Dense, Dropout, Bidirectional, BatchNormalization,
+from keras.layers import (Input, LSTM, GRU, SimpleRNN, Dense, Dropout, Bidirectional, BatchNormalization,
                          Flatten, Activation, RepeatVector, Permute, Multiply, Lambda)
 from keras.callbacks import EarlyStopping, ReduceLROnPlateau
 from keras.optimizers import Adam
 import keras.backend as K
 
 st.title("🔬 Advanced Stock Price Predictor with Attention (Open & Close)")
+model_type = st.selectbox("Choose Model Type", ["LSTM", "GRU", "RNN"])
+
 uploaded_file = st.file_uploader("Upload CSV with 'Date', 'Open', 'High', 'Low', 'Close', 'Volume'", type='csv')
 
 if uploaded_file:
@@ -27,7 +29,7 @@ if uploaded_file:
     scaler = MinMaxScaler()
     scaled_data = scaler.fit_transform(data)
 
-    PAST_DAYS = 180
+    PAST_DAYS = 90  # Reduced to improve training speed
     X, y = [], []
     for i in range(PAST_DAYS, len(scaled_data)):
         X.append(scaled_data[i - PAST_DAYS:i])
@@ -46,27 +48,37 @@ if uploaded_file:
         return Lambda(lambda xin: K.sum(xin, axis=1))(sent_representation)
 
     inputs = Input(shape=(X.shape[1], X.shape[2]))
-    x = Bidirectional(LSTM(128, return_sequences=True))(inputs)
-    x = BatchNormalization()(x)
-    x = Dropout(0.3)(x)
-    x = Bidirectional(LSTM(64, return_sequences=True))(x)
+
+    if model_type == "LSTM":
+        x = Bidirectional(LSTM(64, return_sequences=True))(inputs)
+        x = Dropout(0.2)(x)
+        x = Bidirectional(LSTM(32, return_sequences=True))(x)
+    elif model_type == "GRU":
+        x = Bidirectional(GRU(64, return_sequences=True))(inputs)
+        x = Dropout(0.2)(x)
+        x = Bidirectional(GRU(32, return_sequences=True))(x)
+    else:  # RNN
+        x = Bidirectional(SimpleRNN(64, return_sequences=True))(inputs)
+        x = Dropout(0.2)(x)
+        x = Bidirectional(SimpleRNN(32, return_sequences=True))(x)
+
     x = BatchNormalization()(x)
     x = attention_block(x)
-    x = Dense(64, activation='relu')(x)
+    x = Dense(32, activation='relu')(x)
     outputs = Dense(2)(x)
 
     model = Model(inputs, outputs)
     model.compile(optimizer=Adam(0.001), loss='mean_squared_error')
 
-    st.write("⏳ Training the model with Attention and Stacked Bi-LSTM layers...")
+    st.write(f"⏳ Training the {model_type} model with Attention...")
 
     callbacks = [
-        ReduceLROnPlateau(monitor='val_loss', patience=5, factor=0.5, verbose=1),
-        EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
+        ReduceLROnPlateau(monitor='val_loss', patience=3, factor=0.5, verbose=1),
+        EarlyStopping(monitor='val_loss', patience=6, restore_best_weights=True)
     ]
 
-    history = model.fit(X_train, y_train, validation_data=(X_val, y_val),
-                        epochs=50, batch_size=64, callbacks=callbacks, verbose=1)
+    model.fit(X_train, y_train, validation_data=(X_val, y_val),
+              epochs=30, batch_size=64, callbacks=callbacks, verbose=1)
 
     # Predict next 20 days
     st.subheader("🔮 Predicting Next 20 Days (Open & Close)")
