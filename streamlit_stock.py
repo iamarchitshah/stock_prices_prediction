@@ -1,90 +1,89 @@
-import streamlit as st
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import SimpleRNN, GRU, LSTM, Dense
+from tensorflow.keras.layers import SimpleRNN, LSTM, GRU, Dense
+from tensorflow.keras.optimizers import Adam
 
-st.title("📈 Smart Stock Price Prediction - RNN vs GRU vs LSTM")
-uploaded_file = st.file_uploader("Upload your CSV file", type="csv")
+# Load and prepare data
+df = pd.read_csv("TCS - Sheet1.csv")
+df['Date'] = pd.to_datetime(df['Date'])
+df.set_index('Date', inplace=True)
+data = df[['Close']].values
 
-if uploaded_file:
-    df = pd.read_csv(uploaded_file)
-    df['Date'] = pd.to_datetime(df['Date'])
-    df.set_index('Date', inplace=True)
-    data = df[['Close']].values
+# Normalize
+scaler = MinMaxScaler()
+scaled_data = scaler.fit_transform(data)
 
-    scaler = MinMaxScaler()
-    scaled_data = scaler.fit_transform(data)
+# Create sequences
+def create_sequences(data, seq_len):
+    X, y = [], []
+    for i in range(seq_len, len(data)):
+        X.append(data[i - seq_len:i, 0])
+        y.append(data[i, 0])
+    return np.array(X), np.array(y)
 
-    def create_sequences(data, seq_length):
-        X, y = [], []
-        for i in range(seq_length, len(data)):
-            X.append(data[i - seq_length:i, 0])
-            y.append(data[i, 0])
-        return np.array(X), np.array(y)
+seq_len = 60
+X, y = create_sequences(scaled_data, seq_len)
+X = X.reshape((X.shape[0], X.shape[1], 1))
 
-    seq_len = 60
-    X, y = create_sequences(scaled_data, seq_len)
-    X = X.reshape((X.shape[0], X.shape[1], 1))
+# Split
+split = int(0.8 * len(X))
+X_train, X_test = X[:split], X[split:]
+y_train, y_test = y[:split], y[split:]
 
-    split = int(0.8 * len(X))
-    X_train, X_test = X[:split], X[split:]
-    y_train, y_test = y[:split], y[split:]
+# Train RNN model
+rnn_model = Sequential([
+    SimpleRNN(50, activation='tanh', input_shape=(X_train.shape[1], 1)),
+    Dense(1)
+])
+rnn_model.compile(optimizer='adam', loss='mean_squared_error')
+rnn_model.fit(X_train, y_train, epochs=20, batch_size=32, verbose=1)
 
-    def build_and_train(model_type):
-        model = Sequential()
-        if model_type == 'RNN':
-            model.add(SimpleRNN(50, activation='tanh', input_shape=(X_train.shape[1], 1)))
-        elif model_type == 'GRU':
-            model.add(GRU(50, activation='tanh', input_shape=(X_train.shape[1], 1)))
-        elif model_type == 'LSTM':
-            model.add(LSTM(50, activation='tanh', input_shape=(X_train.shape[1], 1)))
-        model.add(Dense(1))
-        model.compile(optimizer='adam', loss='mean_squared_error')
-        model.fit(X_train, y_train, epochs=20, batch_size=32, verbose=0)
-        y_pred = model.predict(X_test)
-        y_pred_rescaled = scaler.inverse_transform(y_pred)
-        y_test_rescaled = scaler.inverse_transform(y_test.reshape(-1, 1))
-        mse = mean_squared_error(y_test_rescaled, y_pred_rescaled)
-        return y_test_rescaled, y_pred_rescaled, mse
+# Predict using RNN
+rnn_pred = rnn_model.predict(X_test)
+rnn_pred_rescaled = scaler.inverse_transform(rnn_pred)
+y_test_rescaled = scaler.inverse_transform(y_test.reshape(-1, 1))
+rnn_mse = mean_squared_error(y_test_rescaled, rnn_pred_rescaled)
 
-    results = {}
-    for m in ['RNN', 'GRU', 'LSTM']:
-        st.write(f"Training **{m}** model...")
-        actual, predicted, mse = build_and_train(m)
-        results[m] = {'actual': actual, 'predicted': predicted, 'mse': mse}
-        st.success(f"{m} MSE: {mse:.2f}")
+# Define helper to clone architecture and use RNN-trained weights
+def clone_and_predict(X_test, rnn_weights, cell_type):
+    model = Sequential()
+    if cell_type == 'LSTM':
+        model.add(LSTM(50, activation='tanh', input_shape=(X_train.shape[1], 1)))
+    elif cell_type == 'GRU':
+        model.add(GRU(50, activation='tanh', input_shape=(X_train.shape[1], 1)))
+    model.add(Dense(1))
+    model.compile(optimizer='adam', loss='mean_squared_error')
 
-    # Display predicted prices (LSTM)
-st.subheader("🔢 Predicted vs Actual Prices with Error")
+    # Train from scratch (because weights are not transferable)
+    model.fit(X_train, y_train, epochs=20, batch_size=32, verbose=1)
+    pred = model.predict(X_test)
+    pred_rescaled = scaler.inverse_transform(pred)
+    mse = mean_squared_error(y_test_rescaled, pred_rescaled)
+    return pred_rescaled, mse
 
-# Loop through all 3 models and show results
-for model_name in ['RNN', 'GRU', 'LSTM']:
-    st.markdown(f"### 🧠 {model_name} Predictions")
+# Train and predict with GRU and LSTM (for comparison only)
+lstm_pred, lstm_mse = clone_and_predict(X_test, None, 'LSTM')
+gru_pred, gru_mse = clone_and_predict(X_test, None, 'GRU')
 
-    # Create DataFrame
-    df_pred = pd.DataFrame({
-        'Actual Price': results[model_name]['actual'].flatten(),
-        'Predicted Price': results[model_name]['predicted'].flatten()
-    })
-    df_pred['Difference (Error)'] = df_pred['Actual Price'] - df_pred['Predicted Price']
+# Print Results
+print(f"RNN MSE:  {rnn_mse:.2f}")
+print(f"LSTM MSE: {lstm_mse:.2f}")
+print(f"GRU MSE:  {gru_mse:.2f}")
 
-    # Show table
-    st.dataframe(df_pred.tail(30))
-
-    # Print last 5 prediction sentences
-    st.markdown("📌 Prediction Differences (last 5 shown):")
-    for i, row in df_pred.tail(5).iterrows():
-        st.write(f"Actual = {row['Actual Price']:.2f} | Predicted = {row['Predicted Price']:.2f} | Error = {row['Difference (Error)']:.2f}")
-
-    # CSV Download button
-    csv = df_pred.to_csv(index=False).encode('utf-8')
-    st.download_button(
-        label=f"📥 Download {model_name} Predictions as CSV",
-        data=csv,
-        file_name=f"{model_name.lower()}_predictions.csv",
-        mime='text/csv'
-    )
+# Plot Comparison
+plt.figure(figsize=(12, 6))
+plt.plot(y_test_rescaled, label="Actual", linestyle='--', color='black')
+plt.plot(rnn_pred_rescaled, label="RNN")
+plt.plot(lstm_pred, label="LSTM")
+plt.plot(gru_pred, label="GRU")
+plt.title("Stock Price Prediction: RNN vs LSTM vs GRU")
+plt.xlabel("Time Steps")
+plt.ylabel("Price")
+plt.legend()
+plt.grid()
+plt.tight_layout()
+plt.show()
