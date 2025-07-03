@@ -7,7 +7,7 @@ from sklearn.metrics import mean_squared_error
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import SimpleRNN, GRU, LSTM, Dense
 
-st.title("📈 TCS Stock Price Prediction - RNN vs GRU vs LSTM")
+st.title("📈 Smart Stock Price Prediction - RNN vs GRU vs LSTM")
 uploaded_file = st.file_uploader("Upload your CSV file", type="csv")
 
 if uploaded_file:
