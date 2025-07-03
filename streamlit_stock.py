@@ -1,4 +1,4 @@
-# transformer_stock_prediction.py
+# stock_predictor_full_comparison.py
 
 import streamlit as st
 import numpy as np
@@ -7,18 +7,20 @@ import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error
+from sklearn.ensemble import RandomForestRegressor
 import tensorflow as tf
-from tensorflow.keras import layers
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import GRU, SimpleRNN, LSTM, Dense, Dropout, Conv1D, MaxPooling1D, Flatten
 
-st.title("🔮 Transformer-Based Stock Price Predictor")
+st.title("📊 Stock Price Predictor (Open & Close) - All Models")
 
+model_type = st.selectbox("Choose Model", ["Random Forest", "GRU", "RNN", "CNN"])
 uploaded_file = st.file_uploader("Upload CSV with 'Date', 'Open', 'High', 'Low', 'Close', 'Volume'", type='csv')
 
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
     df['Date'] = pd.to_datetime(df['Date'])
     df.set_index('Date', inplace=True)
-
     data = df[['Open', 'High', 'Low', 'Close', 'Volume']].values
     scaler = MinMaxScaler()
     scaled_data = scaler.fit_transform(data)
@@ -27,53 +29,64 @@ if uploaded_file:
     X, y = [], []
     for i in range(PAST_DAYS, len(scaled_data)):
         X.append(scaled_data[i - PAST_DAYS:i])
-        y.append(scaled_data[i, [0, 3]])  # Predict Open and Close
+        y.append(scaled_data[i, [0, 3]])
     X, y = np.array(X), np.array(y)
 
     X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.1, shuffle=False)
 
-    def transformer_encoder(inputs, head_size, num_heads, ff_dim, dropout=0):
-        x = layers.MultiHeadAttention(key_dim=head_size, num_heads=num_heads, dropout=dropout)(inputs, inputs)
-        x = layers.Dropout(dropout)(x)
-        x = layers.LayerNormalization(epsilon=1e-6)(x)
-        res = x + inputs
+    if model_type == "Random Forest":
+        X_rf = X.reshape(X.shape[0], -1)
+        X_train_rf, X_val_rf = X_rf[:len(X_train)], X_rf[len(X_train):]
+        model = RandomForestRegressor(n_estimators=100, max_depth=15, random_state=42, n_jobs=-1)
+        model.fit(X_train_rf, y_train)
+        val_pred = model.predict(X_val_rf)
 
-        x = layers.Conv1D(filters=ff_dim, kernel_size=1, activation='relu')(res)
-        x = layers.Dropout(dropout)(x)
-        x = layers.Conv1D(filters=inputs.shape[-1], kernel_size=1)(x)
-        return layers.LayerNormalization(epsilon=1e-6)(x + res)
+    elif model_type == "GRU":
+        model = Sequential([
+            GRU(50, return_sequences=False, input_shape=(PAST_DAYS, 5)),
+            Dense(2)
+        ])
+        model.compile(optimizer='adam', loss='mse')
+        model.fit(X_train, y_train, epochs=20, batch_size=32, verbose=0)
+        val_pred = model.predict(X_val)
 
-    def build_model(input_shape):
-        inputs = tf.keras.Input(shape=input_shape)
-        x = transformer_encoder(inputs, head_size=64, num_heads=4, ff_dim=128, dropout=0.1)
-        x = layers.GlobalAveragePooling1D()(x)
-        x = layers.Dense(64, activation='relu')(x)
-        x = layers.Dropout(0.1)(x)
-        outputs = layers.Dense(2)(x)
-        return tf.keras.Model(inputs, outputs)
+    elif model_type == "RNN":
+        model = Sequential([
+            SimpleRNN(50, return_sequences=False, input_shape=(PAST_DAYS, 5)),
+            Dense(2)
+        ])
+        model.compile(optimizer='adam', loss='mse')
+        model.fit(X_train, y_train, epochs=20, batch_size=32, verbose=0)
+        val_pred = model.predict(X_val)
 
-    st.write("⏳ Training Transformer model...")
-    model = build_model(X_train.shape[1:])
-    model.compile(optimizer='adam', loss='mean_squared_error')
-    model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=30, batch_size=32, verbose=1)
+    elif model_type == "CNN":
+        model = Sequential([
+            Conv1D(filters=64, kernel_size=3, activation='relu', input_shape=(PAST_DAYS, 5)),
+            MaxPooling1D(pool_size=2),
+            Flatten(),
+            Dense(50, activation='relu'),
+            Dense(2)
+        ])
+        model.compile(optimizer='adam', loss='mse')
+        model.fit(X_train, y_train, epochs=20, batch_size=32, verbose=0)
+        val_pred = model.predict(X_val)
 
-    val_pred = model.predict(X_val)
-
-    st.subheader("📈 Validation Results")
-    padded_val = np.zeros((val_pred.shape[0], 5))
-    padded_val[:, 0] = val_pred[:, 0]
-    padded_val[:, 3] = val_pred[:, 1]
-    pred_val_prices = scaler.inverse_transform(padded_val)
+    # Reverse scaling for plotting
+    padded_pred = np.zeros((val_pred.shape[0], 5))
+    padded_pred[:, 0] = val_pred[:, 0]
+    padded_pred[:, 3] = val_pred[:, 1]
+    pred_val_prices = scaler.inverse_transform(padded_pred)
 
     actual_val = scaler.inverse_transform(np.concatenate(
         [y_val[:, [0]], np.zeros((len(y_val), 2)), y_val[:, [1]], np.zeros((len(y_val), 1))], axis=1))
 
+    st.subheader("📈 Actual vs Predicted")
     fig_val, ax_val = plt.subplots(figsize=(12, 6))
     ax_val.plot(actual_val[:, 0], label='Actual Open', linestyle='--')
     ax_val.plot(pred_val_prices[:, 0], label='Predicted Open')
     ax_val.plot(actual_val[:, 3], label='Actual Close', linestyle='--')
     ax_val.plot(pred_val_prices[:, 3], label='Predicted Close')
-    ax_val.set_title("Actual vs Predicted (Validation)")
+    ax_val.set_title(f"{model_type} Model: Validation Performance")
     ax_val.legend()
     st.pyplot(fig_val)
 
@@ -82,11 +95,14 @@ if uploaded_file:
     test_data = scaled_data[-(PAST_DAYS + 20):]
     X_test = []
     for i in range(PAST_DAYS, PAST_DAYS + 20):
-        sample = test_data[i - PAST_DAYS:i]
-        X_test.append(sample)
+        X_test.append(test_data[i - PAST_DAYS:i])
     X_test = np.array(X_test)
 
-    test_pred = model.predict(X_test)
+    if model_type == "Random Forest":
+        test_pred = model.predict(X_test.reshape(X_test.shape[0], -1))
+    else:
+        test_pred = model.predict(X_test)
+
     padded = np.zeros((test_pred.shape[0], 5))
     padded[:, 0] = test_pred[:, 0]
     padded[:, 3] = test_pred[:, 1]
@@ -103,9 +119,9 @@ if uploaded_file:
     fig, ax = plt.subplots(figsize=(12, 6))
     ax.plot(pred_df.index, pred_df['Predicted Open'], label='Predicted Open', marker='o')
     ax.plot(pred_df.index, pred_df['Predicted Close'], label='Predicted Close', marker='x')
-    ax.set_title("Predicted Prices (Next 20 Days)")
+    ax.set_title("Next 20 Day Forecast")
     ax.legend()
     st.pyplot(fig)
 
     csv = pred_df.to_csv().encode('utf-8')
-    st.download_button("📥 Download Predictions", csv, "predicted_transformer.csv", "text/csv")
+    st.download_button("📥 Download Predictions", csv, f"predicted_{model_type.lower()}.csv", "text/csv")
