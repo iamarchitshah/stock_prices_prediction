@@ -1,5 +1,5 @@
 # stock_predictor_advanced.py
-# Deep feature engineering, optimized model structures, and hybrid approach
+# Deep transformer training + enhanced attention layers
 
 import streamlit as st
 import numpy as np
@@ -50,7 +50,7 @@ if uploaded_file:
     X, y = np.array(X), np.array(y)
     X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.1, shuffle=False)
 
-    def transformer_encoder(inputs, head_size=64, num_heads=2, ff_dim=128, dropout=0.1):
+    def transformer_encoder(inputs, head_size=128, num_heads=4, ff_dim=256, dropout=0.2):
         x = tf.keras.layers.MultiHeadAttention(num_heads=num_heads, key_dim=head_size)(inputs, inputs)
         x = Dropout(dropout)(x)
         x = LayerNormalization(epsilon=1e-6)(x + inputs)
@@ -60,11 +60,13 @@ if uploaded_file:
         x = tf.keras.layers.Conv1D(filters=inputs.shape[-1], kernel_size=1)(x)
         return LayerNormalization(epsilon=1e-6)(x + res)
 
-    def build_transformer_model(input_shape):
+    def build_transformer_model(input_shape, num_layers=4):
         inputs = Input(shape=input_shape)
-        x = transformer_encoder(inputs)
+        x = inputs
+        for _ in range(num_layers):
+            x = transformer_encoder(x)
         x = GlobalAveragePooling1D()(x)
-        x = Dense(128, activation='relu')(x)
+        x = Dense(256, activation='relu')(x)
         x = Dropout(0.3)(x)
         outputs = Dense(2)(x)
         return Model(inputs, outputs)
@@ -77,32 +79,30 @@ if uploaded_file:
         model.fit(X_rf[:len(X_train)], y_train)
         val_pred = model.predict(X_rf[len(X_train):])
     else:
-        model = Sequential()
-        if model_type == "LSTM":
-            model.add(LSTM(128, return_sequences=True, input_shape=(X.shape[1], X.shape[2])))
-            model.add(Dropout(0.2))
-            model.add(LSTM(64))
-        elif model_type == "GRU":
-            model.add(GRU(128, return_sequences=True, input_shape=(X.shape[1], X.shape[2])))
-            model.add(Dropout(0.2))
-            model.add(GRU(64))
-        elif model_type == "RNN":
-            model.add(SimpleRNN(64, return_sequences=False, input_shape=(X.shape[1], X.shape[2])))
-        elif model_type == "CNN":
-            model.add(Conv1D(64, 3, activation='relu', input_shape=(X.shape[1], X.shape[2])))
-            model.add(MaxPooling1D(pool_size=2))
-            model.add(Flatten())
-        elif model_type == "Transformer":
-            model = build_transformer_model(X.shape[1:])
-
-        if model_type != "Transformer":
+        if model_type == "Transformer":
+            model = build_transformer_model(X.shape[1:], num_layers=4)
+            model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.0005), loss='mse')
+            model.fit(X_train, y_train, epochs=50, batch_size=32, verbose=0)
+            val_pred = model.predict(X_val)
+        else:
+            model = Sequential()
+            if model_type == "LSTM":
+                model.add(LSTM(128, return_sequences=True, input_shape=(X.shape[1], X.shape[2])))
+                model.add(Dropout(0.2))
+                model.add(LSTM(64))
+            elif model_type == "GRU":
+                model.add(GRU(128, return_sequences=True, input_shape=(X.shape[1], X.shape[2])))
+                model.add(Dropout(0.2))
+                model.add(GRU(64))
+            elif model_type == "RNN":
+                model.add(SimpleRNN(64, return_sequences=False, input_shape=(X.shape[1], X.shape[2])))
+            elif model_type == "CNN":
+                model.add(Conv1D(64, 3, activation='relu', input_shape=(X.shape[1], X.shape[2])))
+                model.add(MaxPooling1D(pool_size=2))
+                model.add(Flatten())
             model.add(Dense(64, activation='relu'))
             model.add(Dropout(0.2))
             model.add(Dense(2))
-            model.compile(optimizer='adam', loss='mse')
-            model.fit(X_train, y_train, epochs=30, batch_size=32, verbose=0)
-            val_pred = model.predict(X_val)
-        else:
             model.compile(optimizer='adam', loss='mse')
             model.fit(X_train, y_train, epochs=30, batch_size=32, verbose=0)
             val_pred = model.predict(X_val)
@@ -167,4 +167,4 @@ if uploaded_file:
     ax2.legend()
     st.pyplot(fig2)
 
-    st.success("🎉 Ultra-accurate model with advanced training and forecasting ready!")
+    st.success("🎉 Deep Transformer model training and forecasting complete!")
