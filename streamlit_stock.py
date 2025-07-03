@@ -6,7 +6,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_absolute_percentage_error, mean_squared_error
+from sklearn.metrics import mean_absolute_percentage_error, mean_squared_error, r2_score
 from sklearn.ensemble import RandomForestRegressor
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
@@ -109,7 +109,9 @@ if uploaded_file:
     # 🎯 Add Metrics
     val_mape = mean_absolute_percentage_error(y_val, val_pred) * 100
     val_mse = mean_squared_error(y_val, val_pred)
-    st.success(f"✅ Model trained successfully | Validation MAPE: {val_mape:.2f}% | MSE: {val_mse:.4f}")
+    val_rmse = np.sqrt(val_mse)
+    val_r2 = r2_score(y_val, val_pred)
+    st.success(f"✅ Model trained successfully | MAPE: {val_mape:.2f}% | MSE: {val_mse:.4f} | RMSE: {val_rmse:.4f} | R²: {val_r2:.4f}")
 
     st.subheader("📉 Actual vs Predicted")
     fig, ax = plt.subplots(figsize=(12, 6))
